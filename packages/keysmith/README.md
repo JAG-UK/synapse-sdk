@@ -434,12 +434,14 @@ A link to a single piece (`node: 'piece:<salt>'`) also needs the piece's labels 
 #### Asserting, as the final bearer
 
 ```ts
-const request = await Keysmith.signRequest(myAccount, chain, {
-  pieceCid: CID.parse(cid).bytes, expires: Math.floor(Date.now() / 1000) + 120,
-})
-// the Authorization header value; base64url is yours (Keysmith has no text encoding)
-const header = `FOC-Grant ${base64url(Keysmith.encodePresentation(chain, request))}`
+const { chain } = await Keysmith.openDelivery(myPrivateKey, delivery)
+const header = await Keysmith.authorizationHeader(myAccount, chain, { pieceCid: CID.parse(cid).bytes })
+const response = await fetch(`${serviceURL}/download/${cid}`, { headers: { Authorization: header } })
 ```
+
+Make a fresh header for each fetch: it expires after `expiresIn` seconds (default 240, at most
+`MAX_REQUEST_LIFETIME`). `signRequest` and `encodePresentation` are the parts, for a caller
+that encodes the header itself.
 
 #### Verifying, as a relying party
 
@@ -635,6 +637,7 @@ a new dataset's metadata too.
 | `encodeDelivery(chain, grant)` / `decodeDelivery(bytes)` | A claim chain and its grant, as one blob for the new bearer |
 | `openDelivery(privateKey, bytes, { now?, piece? })` | Verify a delivery and unwrap its key, checked against the owner-signed commitment; opens an expired one, reporting `expired` |
 | `signRequest(signer, chain, { pieceCid, expires, now? })` | A request for one piece, by the final bearer; any provider holding it may serve it. Refuses an expired chain, or an `expires` more than `MAX_REQUEST_LIFETIME` ahead or already past |
+| `authorizationHeader(signer, chain, { pieceCid, expiresIn?, now? })` | `FOC-Grant <base64url presentation>`, for one gated request. Refuses as `signRequest` does |
 | `encodePresentation(chain, request)` / `decodePresentation(bytes)` | The `Authorization: FOC-Grant` payload |
 | `verifyChain(chain, { now?, piece? })` | Check a chain on its own: signatures, expiry, narrowing |
 | `verifyPresentation(bytes, { pieceCid, piece, chainId, now? })` | What a gating provider checks; the reference verifier |

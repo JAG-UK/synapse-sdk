@@ -637,6 +637,32 @@ export function decodeDelivery(bytes: Uint8Array): { chain: ClaimChain; grant: G
   return { chain: decodeChainLinks(chain), grant: decodeGrant(grant) }
 }
 
+/**
+ * The `Authorization` header for one gated request: a request signed by the chain's final bearer, presented with
+ * its chain. Make a fresh one per fetch; it expires after `expiresIn` seconds (at most MAX_REQUEST_LIFETIME).
+ *
+ * @throws As `signRequest` does: an expired chain, or an `expiresIn` the gate would refuse.
+ */
+export async function authorizationHeader(
+  signer: ClaimSigner,
+  chain: ClaimChain,
+  input: { pieceCid: Uint8Array; expiresIn?: number; now?: number }
+): Promise<string> {
+  const now = input.now ?? Math.floor(Date.now() / 1000)
+  const request = await signRequest(signer, chain, {
+    pieceCid: input.pieceCid,
+    expires: now + (input.expiresIn ?? MAX_REQUEST_LIFETIME - SKEW),
+    now,
+  })
+  return `FOC-Grant ${base64url(encodePresentation(chain, request))}`
+}
+
+function base64url(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 /** A presentation: sent to a provider with each gated request, as `Authorization: FOC-Grant <base64url>`. */
 export function encodePresentation(chain: ClaimChain, request: ReadRequest): Uint8Array {
   const req = new Map<number, unknown>([

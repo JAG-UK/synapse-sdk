@@ -4,6 +4,7 @@ import type { Hex } from 'viem'
 import { bytesToHex, hexToBytes } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import {
+  authorizationHeader,
   decodeDelivery,
   decodePresentation,
   delegateClaim,
@@ -205,6 +206,19 @@ describe('claims', () => {
     )
     const ungated: PieceLabels = { 'foc/ks': keyspace, 'foc/salt': newSalt() }
     assert.ok(await check(await present(), ungated))
+  })
+
+  it('builds the Authorization header a gating provider verifies', async () => {
+    const { chain } = await root('keyspace', 0)
+    const header = await authorizationHeader(a, chain, { pieceCid: PIECE, now })
+    const [scheme, token = ''] = header.split(' ')
+    assert.equal(scheme, 'FOC-Grant')
+    assert.match(token, /^[A-Za-z0-9_-]+$/) // base64url, unpadded
+    const bytes = Uint8Array.from(atob(token.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+    assert.equal(decodePresentation(bytes).request.expires, now + MAX_REQUEST_LIFETIME - 60)
+    const claim = await verifyPresentation(bytes, { pieceCid: PIECE, piece: labels(), chainId, now })
+    assert.equal(claim.bearer, a.address)
+    await assert.rejects(authorizationHeader(a, chain, { pieceCid: PIECE, now, expiresIn: 3600 }), /must expire within/)
   })
 
   it('signs only a request expiry the gate accepts', async () => {

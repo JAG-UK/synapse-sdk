@@ -10,6 +10,7 @@ export type {
   VerifiedClaim,
 } from './claims.ts'
 export {
+  authorizationHeader,
   decodeDelivery,
   decodePresentation,
   delegateClaim,
